@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Shield, User, Lock, Loader2 } from 'lucide-react';
+import { api } from '@/lib/api';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -18,18 +19,12 @@ const LoginPage: React.FC = () => {
     setError('');
     
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username, password }),
-      });
-      
-      if (!response.ok) throw new Error('Invalid credentials');
-      
-      const data = await response.json();
-      login(data.access_token, data.role, username);
+      const data = await api.login(username, password);
+      login(data.access_token, data.role as ('admin' | 'worker' | 'citizen'), username);
     } catch (err) {
-      setError('Login failed. Please check your credentials.');
+      const errorMsg = err instanceof Error ? err.message : 'Login failed. Please check your credentials.';
+      setError(errorMsg);
+      console.error('Login error:', err);
     } finally {
       setIsLoggingIn(false);
     }
