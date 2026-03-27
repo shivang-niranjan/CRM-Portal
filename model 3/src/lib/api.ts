@@ -18,12 +18,13 @@ import type {
   ResolveTicketResponse
 } from '@/types';
 
-// API base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// API base URL - Vite will proxy requests to the backend in development
+// In production, this can be set via environment variable or use absolute URLs
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-// Create axios instance
+// Create axios instance with empty baseURL since Vite proxy handles routing
 const axiosInstance: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: '',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -37,7 +38,7 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     return config;
   },
   (error) => {
@@ -53,7 +54,14 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   (error: AxiosError) => {
-    console.error('❌ Response Error:', error.response?.status, error.message);
+    console.error('❌ Response Error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      message: error.message,
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      data: error.response?.data
+    });
     
     const errorMessage = 
       (error.response?.data as { detail?: string })?.detail || 
@@ -68,6 +76,27 @@ axiosInstance.interceptors.response.use(
 // ==================== API METHODS ====================
 
 export const api = {
+  // ==================== AUTH ====================
+  
+  login: async (username: string, password: string): Promise<{ 
+    access_token: string; 
+    token_type: string; 
+    role: 'admin' | 'worker' | 'citizen' 
+  }> => {
+    const response = await axiosInstance.post('/api/auth/login', 
+      new URLSearchParams({ username, password }),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      }
+    );
+    return response.data;
+  },
+
+  getCurrentUser: async (): Promise<{ username: string; role: string; full_name?: string }> => {
+    const response = await axiosInstance.get('/api/auth/me');
+    return response.data;
+  },
+
   // Health check
   healthCheck: async (): Promise<{ status: string; service: string; version: string }> => {
     const response = await axiosInstance.get('/health');

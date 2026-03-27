@@ -50,8 +50,8 @@ class Settings(BaseSettings):
     # Gamification
     LEADERBOARD_UPDATE_INTERVAL: int = 300  # 5 minutes
     
-    # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # CORS - Allow all origins in development, restrict in production
+    CORS_ORIGINS: List[str] = ["*"]  # Remove in production and use specific origins
     
     class Config:
         env_file = ".env"
