@@ -74,22 +74,41 @@ const CitizenDashboard: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  const handleVoiceIntake = async () => {
-    setIsRecording(true);
-    toast.info("Listening... Speak in your regional language.");
-    
-    // Simulate recording delay
-    setTimeout(async () => {
-      try {
-        const result = await api.transcribeVoice("dummy_url", selectedLanguage);
-        setComplaintText(result.transcript);
-        setIsRecording(false);
-        toast.success(`Translated from ${selectedLanguage === 'hi-IN' ? 'Hindi' : 'Regional Language'}`);
-      } catch (error) {
-        setIsRecording(false);
-        toast.error("Voice translation failed");
-      }
-    }, 3000);
+  const handleVoiceIntake = () => {
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Speech Recognition is not supported in your browser.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = selectedLanguage;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      toast.info("Listening... Speak now");
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setComplaintText(prev => prev + (prev ? ' ' : '') + transcript);
+      toast.success("Voice transcribed successfully!");
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech endpoint error:", event.error);
+      toast.error(`Recording failed: ${event.error}`);
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.start();
   };
 
   const handleGetLocation = () => {
@@ -176,30 +195,34 @@ const CitizenDashboard: React.FC = () => {
           <CardContent>
             <div className="flex flex-col gap-4">
               <div className="relative">
-                <Input 
-                  placeholder="Describe the issue or use voice →" 
-                  className="bg-slate-950 border-slate-800 pr-24"
+                <textarea 
+                  placeholder="Describe the issue in detail, or use voice dictation →" 
+                  className="w-full bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 pr-24 min-h-[140px] text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y transition-all drop-shadow-sm"
                   value={complaintText}
                   onChange={(e) => setComplaintText(e.target.value)}
                 />
-                <div className="absolute right-1 top-1 flex gap-1">
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    className={`${isRecording ? 'text-red-500 animate-pulse' : 'text-slate-400'}`}
-                    onClick={handleVoiceIntake}
-                  >
-                    <Mic className="w-4 h-4" />
-                  </Button>
-                  <select 
-                    className="bg-transparent text-[10px] text-slate-500 border-none outline-none cursor-pointer"
-                    value={selectedLanguage}
-                    onChange={(e) => setSelectedLanguage(e.target.value)}
-                  >
-                    <option value="hi-IN">HI</option>
-                    <option value="mr-IN">MR</option>
-                    <option value="ta-IN">TA</option>
-                  </select>
+                <div className="absolute right-3 top-3 flex flex-col gap-2 items-end">
+                  <div className="flex bg-slate-900/90 rounded-md p-1 border border-slate-700 shadow-sm backdrop-blur-sm">
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className={`h-8 w-8 rounded-md transition-colors ${isRecording ? 'text-red-500 animate-pulse bg-red-500/10 hover:bg-red-500/20 hover:text-red-400' : 'text-slate-400 hover:text-blue-400 hover:bg-blue-500/10'}`}
+                      onClick={handleVoiceIntake}
+                    >
+                      <Mic className="w-4 h-4" />
+                    </Button>
+                    <select 
+                      className="bg-transparent text-[11px] font-bold tracking-wide text-slate-400 border-none outline-none cursor-pointer px-1 h-8"
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                    >
+                      <option value="en-IN">EN</option>
+                      <option value="hi-IN">HI</option>
+                      <option value="mr-IN">MR</option>
+                      <option value="ta-IN">TA</option>
+                    </select>
+                  </div>
+                  {isRecording && <span className="text-[10px] font-medium text-red-500 animate-pulse pr-1 bg-slate-900/80 px-2 py-0.5 rounded shadow-sm">Listening...</span>}
                 </div>
               </div>
               

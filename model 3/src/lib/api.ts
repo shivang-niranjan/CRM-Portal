@@ -15,7 +15,8 @@ import type {
   LeaderboardResponse,
   RedZone,
   ClassificationResult,
-  ResolveTicketResponse
+  ResolveTicketResponse,
+  CitizenLeaderboardResponse
 } from '@/types';
 
 // API base URL - Vite will proxy requests to the backend in development
@@ -159,6 +160,11 @@ export const api = {
     return response.data;
   },
 
+  getTicketReports: async (id: number): Promise<CitizenReport[]> => {
+    const response = await axiosInstance.get(`/api/tickets/${id}/reports`);
+    return response.data;
+  },
+
   updateTicket: async (
     id: number,
     update: {
@@ -238,7 +244,7 @@ export const api = {
   // ==================== LEADERBOARD ====================
   
   getDepartmentLeaderboard: async (): Promise<LeaderboardResponse> => {
-    const response = await axiosInstance.get('/api/leaderboard/departments');
+    const response = await axiosInstance.get('/api/leaderboard');
     return response.data;
   },
 

@@ -64,6 +64,7 @@ export interface CitizenReport {
   source: string;
   created_at: string;
   master_ticket_id?: number;
+  citizen_name?: string;
 }
 
 // ==================== DASHBOARD TYPES ====================

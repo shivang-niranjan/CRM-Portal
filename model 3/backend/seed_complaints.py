@@ -64,6 +64,8 @@ def seed_data():
             worker_obj = None
 
         print("Seeding Clustered Data in Delhi...")
+        citizen_user = db.query(User).filter(User.username == "aarav").first()
+        aarav_id_str = str(citizen_user.id) if citizen_user else "4"
         # Delhi Coordinates (Connaught Place area)
         lat_base, lon_base = 28.6328, 77.2197
         
@@ -156,6 +158,7 @@ def seed_data():
                     category=cat,
                     master_ticket_id=mt.id,
                     citizen_name=citizen,
+                    citizen_id=aarav_id_str if citizen == "Aarav Sharma" else None,
                     source=source
                 )
                 db.add(cr)

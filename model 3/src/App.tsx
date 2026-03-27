@@ -51,6 +51,7 @@ function App() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Fetch dashboard stats on mount (only for admin/worker)
   useEffect(() => {
@@ -72,9 +73,9 @@ function App() {
     };
 
     fetchDashboardStats();
-    const interval = setInterval(fetchDashboardStats, 30000); 
+    const interval = setInterval(fetchDashboardStats, 10000); 
     return () => clearInterval(interval);
-  }, [token, user?.role]);
+  }, [token, user?.role, refreshKey]);
 
   const handleTicketClick = (ticket: Ticket) => {
     setSelectedTicket(ticket);
@@ -84,6 +85,10 @@ function App() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedTicket(null);
+  };
+
+  const handleTicketUpdate = () => {
+    setRefreshKey(prev => prev + 1);
   };
 
   const getCategoryIcon = (category: string) => {
@@ -174,19 +179,19 @@ function App() {
             </TabsList>
 
             <TabsContent value="dashboard" className="space-y-4">
-              <DashboardStats stats={stats} onTicketClick={handleTicketClick} />
+              <DashboardStats key={`dash-${refreshKey}`} stats={stats} onTicketClick={handleTicketClick} />
             </TabsContent>
             <TabsContent value="map" className="space-y-4">
-              <LiveMap onTicketClick={handleTicketClick} />
+              <LiveMap key={`map-${refreshKey}`} onTicketClick={handleTicketClick} />
             </TabsContent>
             <TabsContent value="kanban" className="space-y-4">
-              <SmartKanban onTicketClick={handleTicketClick} />
+              <SmartKanban key={`kanban-${refreshKey}`} onTicketClick={handleTicketClick} />
             </TabsContent>
             <TabsContent value="heatmap" className="space-y-4">
-              <RedZoneHeatmap />
+              <RedZoneHeatmap key={`heatmap-${refreshKey}`} />
             </TabsContent>
             <TabsContent value="leaderboard" className="space-y-4">
-              <DepartmentLeaderboard />
+              <DepartmentLeaderboard key={`leaderboard-${refreshKey}`} />
             </TabsContent>
           </Tabs>
         )}
@@ -197,6 +202,7 @@ function App() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         getCategoryIcon={getCategoryIcon}
+        onUpdate={handleTicketUpdate}
       />
       <Toaster position="top-right" theme="dark" />
     </div>

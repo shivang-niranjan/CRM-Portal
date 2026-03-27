@@ -36,7 +36,7 @@ export default function DepartmentLeaderboard() {
   const fetchLeaderboard = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await api.getLeaderboard();
+      const data = await api.getDepartmentLeaderboard();
       setDepartments(data.departments);
       setLastUpdated(data.last_updated);
       setTotalToday(data.total_tickets_today);

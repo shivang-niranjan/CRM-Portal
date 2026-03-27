@@ -16,6 +16,21 @@ import {
 import { api } from '@/lib/api';
 import type { Ticket } from '@/types';
 import { toast } from 'sonner';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix Leaflet default icons
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+const DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const WorkerView: React.FC = () => {
   const { user } = useAuth();
@@ -94,12 +109,41 @@ const WorkerView: React.FC = () => {
         </Badge>
       </div>
 
-      {/* Tasks List */}
-      <div className="space-y-4">
+      {/* Unified Worker Map */}
+      <Card className="bg-slate-900 border-slate-800 overflow-hidden">
+        <div className="h-64 w-full z-0 relative">
+          {!isLoading && activeTasks.length > 0 ? (
+            <MapContainer 
+              center={[activeTasks[0].latitude, activeTasks[0].longitude]} 
+              zoom={13} 
+              style={{ height: '100%', width: '100%', zIndex: 0 }}
+            >
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+              {activeTasks.map(task => (
+                <Marker key={task.id} position={[task.latitude, task.longitude]}>
+                  <Popup className="custom-popup">
+                    <div className="p-2 min-w-[150px]">
+                      <Badge className="mb-2 bg-blue-600">{task.ticket_number}</Badge>
+                      <p className="text-sm font-medium">{task.description}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
+          ) : (
+            <div className="h-full w-full flex items-center justify-center bg-slate-900/50">
+              <MapPin className="w-8 h-8 text-slate-600 mb-2 opacity-50" />
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Compact Tasks List */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {isLoading ? (
-          <div className="flex justify-center py-12"><Loader2 className="animate-spin text-orange-500" /></div>
+          <div className="flex justify-center py-12 md:col-span-2"><Loader2 className="animate-spin text-orange-500" /></div>
         ) : activeTasks.length === 0 ? (
-          <Card className="bg-slate-900 border-slate-800 border-dashed">
+          <Card className="bg-slate-900 border-slate-800 border-dashed md:col-span-2">
             <CardContent className="p-12 text-center text-slate-500">
               <CheckCircle className="w-12 h-12 mx-auto mb-4 opacity-20" />
               <p>All clear! No pending assignments.</p>
@@ -107,68 +151,56 @@ const WorkerView: React.FC = () => {
           </Card>
         ) : (
           activeTasks.map(task => (
-            <Card key={task.id} className="bg-slate-900 border-slate-800 overflow-hidden hover:border-slate-700 transition-colors">
-              <CardHeader className="pb-3 border-b border-slate-800/50 bg-slate-800/20">
-                <div className="flex justify-between items-start">
-                  <div>
+            <Card key={task.id} className="bg-slate-900 border-slate-800 overflow-hidden hover:border-slate-700 transition-colors flex flex-col">
+              <CardHeader className="p-3 border-b border-slate-800/50 bg-slate-800/20">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex gap-2 flex-col items-start">
                     <Badge className={task.priority === 'critical' ? 'bg-red-600' : task.priority === 'high' ? 'bg-orange-600' : 'bg-blue-600'}>
                       {task.priority} Priority
                     </Badge>
-                    <CardTitle className="text-lg mt-2 text-white line-clamp-1">{task.description}</CardTitle>
+                    <CardTitle className="text-sm mt-1 text-white line-clamp-2">{task.description}</CardTitle>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <p className="text-xs text-slate-500 font-mono">{task.ticket_number}</p>
                     {task.sla_breached ? (
                       <p className="text-xs text-red-400 font-bold flex items-center justify-end gap-1 mt-1">
-                        <AlertTriangle className="w-3 h-3" /> SLA BREACHED
+                        <AlertTriangle className="w-3 h-3" /> BREACHED
                       </p>
                     ) : (
                       <p className="text-xs text-orange-400 font-medium flex items-center justify-end gap-1 mt-1">
-                        <Clock className="w-3 h-3" /> {Math.round(task.time_remaining_hours)}h remaining
+                        <Clock className="w-3 h-3" /> {Math.round(task.time_remaining_hours)}h
                       </p>
                     )}
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-4 space-y-4">
-                <div className="flex items-center gap-2 text-sm text-slate-300">
-                  <MapPin className="w-4 h-4 text-slate-400" />
+              <CardContent className="p-3 flex-1 flex flex-col justify-end">
+                <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
+                  <MapPin className="w-3 h-3 text-slate-500" />
                   {task.latitude.toFixed(4)}, {task.longitude.toFixed(4)}
                 </div>
-                <div 
-                  className="aspect-video bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-center cursor-pointer group relative overflow-hidden"
-                  onClick={() => handleNavigate(task.latitude, task.longitude)}
-                >
-                  <img 
-                    src={`https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=400`} 
-                    alt="Map" 
-                    className="w-full h-full object-cover opacity-30 group-hover:opacity-50 transition-opacity"
-                  />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 group-hover:text-white transition-colors">
-                    <Navigation className="w-8 h-8 mb-2" />
-                    <span className="text-xs font-bold uppercase tracking-widest">Open in Maps</span>
-                  </div>
-                </div>
               </CardContent>
-              <CardFooter className="p-2 bg-slate-800/30 flex gap-2">
+              <CardFooter className="p-2 bg-slate-800/30 flex gap-2 shrink-0">
                 <Button 
-                  className="flex-1 bg-blue-600 hover:bg-blue-500"
+                  size="sm"
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-xs h-8"
                   onClick={() => handleNavigate(task.latitude, task.longitude)}
                 >
-                  <Navigation className="w-4 h-4 mr-2" /> Navigate
+                  <Navigation className="w-3 h-3 mr-1" /> Navigate
                 </Button>
                 <Button 
-                  className="flex-1 bg-green-600 hover:bg-green-500"
+                  size="sm"
+                  className="flex-1 bg-green-600 hover:bg-green-500 text-xs h-8"
                   disabled={isResolving === task.id}
                   onClick={() => handleResolve(task)}
                 >
-                  {isResolving === task.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Camera className="w-4 h-4 mr-2" />}
+                  {isResolving === task.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Camera className="w-3 h-3 mr-1" />}
                   Resolve
                 </Button>
               </CardFooter>
             </Card>
-          )
-        ))}
+          ))
+        )}
       </div>
 
       {/* Resolution Instructions */}

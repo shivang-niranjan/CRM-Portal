@@ -40,8 +40,8 @@ export default function DashboardStats({ stats, onTicketClick }: DashboardStatsP
     
     fetchRecentTickets();
     
-    // Poll for recent tickets every 30 seconds
-    const interval = setInterval(fetchRecentTickets, 30000);
+    // Poll for recent tickets every 10 seconds
+    const interval = setInterval(fetchRecentTickets, 10000);
     return () => clearInterval(interval);
   }, []);
 

@@ -328,6 +328,18 @@ async def get_ticket(
     return ticket.to_dict()
 
 
+@app.get("/api/tickets/{ticket_id}/reports", response_model=List[CitizenReportResponse], tags=["Tickets"])
+async def get_ticket_reports(
+    ticket_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get all individual citizen reports clustered into this ticket."""
+    reports = db.query(ticket_models.CitizenReport).filter(
+        ticket_models.CitizenReport.master_ticket_id == ticket_id
+    ).all()
+    return [report.to_dict() for report in reports]
+
+
 @app.patch("/api/tickets/{ticket_id}", response_model=MasterTicketResponse, tags=["Tickets"])
 async def update_ticket(
     ticket_id: int,
@@ -518,6 +530,11 @@ async def get_dashboard_stats(
         ])
     ).all()
     
+    # Pre-check active tickets for dynamic SLA breaches
+    for ticket in active_tickets:
+        ticket.check_sla_breach()
+    db.commit()
+    
     # Tickets by status
     status_counts = {}
     for status in ticket_models.TicketStatus:
@@ -546,11 +563,13 @@ async def get_dashboard_stats(
     
     avg_resolution = 0
     if resolved_tickets:
-        total_hours = sum([
-            (t.resolved_at - t.created_at).total_seconds() / 3600
-            for t in resolved_tickets if t.created_at
-        ])
-        avg_resolution = total_hours / len(resolved_tickets)
+        valid_tickets = [t for t in resolved_tickets if t.created_at and t.resolved_at]
+        if valid_tickets:
+            total_hours = sum([
+                max(0, (t.resolved_at - t.created_at).total_seconds() / 3600)
+                for t in valid_tickets
+            ])
+            avg_resolution = total_hours / len(valid_tickets)
     
     # Today's reports
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)

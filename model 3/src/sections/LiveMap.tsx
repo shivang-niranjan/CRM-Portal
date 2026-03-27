@@ -117,7 +117,6 @@ export default function LiveMap({ onTicketClick }: LiveMapProps) {
       setIsLoading(true);
       const data = await api.getMapMarkers();
       setMarkers(data);
-      toast.success('Map updated with latest tickets');
     } catch (error) {
       console.error('Failed to fetch map markers:', error);
       toast.error('Failed to fetch map markers');
@@ -129,8 +128,8 @@ export default function LiveMap({ onTicketClick }: LiveMapProps) {
   useEffect(() => {
     fetchMarkers();
     
-    // Poll for updates every 30 seconds
-    const interval = setInterval(fetchMarkers, 30000);
+    // Poll for updates every 10 seconds
+    const interval = setInterval(fetchMarkers, 10000);
     return () => clearInterval(interval);
   }, [fetchMarkers]);
 

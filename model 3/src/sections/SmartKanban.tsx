@@ -358,8 +358,8 @@ export default function SmartKanban({ onTicketClick }: SmartKanbanProps) {
   useEffect(() => {
     fetchKanbanData();
     
-    // Poll for updates every 30 seconds
-    const interval = setInterval(fetchKanbanData, 30000);
+    // Poll for updates every 10 seconds
+    const interval = setInterval(fetchKanbanData, 10000);
     return () => clearInterval(interval);
   }, [fetchKanbanData]);
 

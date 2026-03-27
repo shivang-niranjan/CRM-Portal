@@ -26,7 +26,7 @@ import {
   Save,
   Loader2
 } from 'lucide-react';
-import type { Ticket } from '@/types';
+import type { Ticket, CitizenReport } from '@/types';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { 
@@ -43,23 +43,46 @@ interface TicketDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   getCategoryIcon: (category: string) => React.ReactNode;
+  onUpdate?: () => void;
 }
 
 export default function TicketDetailModal({ 
   ticket, 
   isOpen, 
   onClose,
-  getCategoryIcon 
+  getCategoryIcon,
+  onUpdate
 }: TicketDetailModalProps) {
   const [activeTab, setActiveTab] = useState('details');
   const [newStatus, setNewStatus] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [reports, setReports] = useState<CitizenReport[]>([]);
+  const [isLoadingReports, setIsLoadingReports] = useState(false);
 
   useEffect(() => {
     if (ticket) {
       setNewStatus(ticket.status);
     }
   }, [ticket]);
+
+  useEffect(() => {
+    const fetchReports = async () => {
+      if (ticket && isOpen && ticket.report_count > 1) {
+        try {
+          setIsLoadingReports(true);
+          const data = await api.getTicketReports(ticket.id);
+          setReports(data);
+        } catch (error) {
+          console.error("Failed to fetch sub-tickets:", error);
+        } finally {
+          setIsLoadingReports(false);
+        }
+      } else {
+        setReports([]);
+      }
+    };
+    fetchReports();
+  }, [ticket, isOpen]);
 
   if (!ticket) return null;
 
@@ -70,8 +93,8 @@ export default function TicketDetailModal({
       setIsUpdating(true);
       await api.updateTicket(ticket.id, { status: newStatus });
       toast.success(`Ticket status updated to ${newStatus}`);
+      onUpdate?.(); // Trigger global refresh
       onClose(); // Close modal on success to refresh data
-      // In a real app, we'd probably use a global state or re-fetch
     } catch (error) {
       console.error('Failed to update ticket status:', error);
       toast.error('Failed to update ticket status');
@@ -187,6 +210,11 @@ export default function TicketDetailModal({
                 <span className="text-sm capitalize">{ticket.category}</span>
               </div>
               
+              <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full">
+                <span className="text-sm text-slate-400">Source:</span>
+                <span className="text-sm font-medium capitalize text-slate-200">{ticket.source || 'Unknown'}</span>
+              </div>
+
               {ticket.report_count > 1 && (
                 <Badge variant="secondary" className="bg-blue-500/20 text-blue-400">
                   {ticket.report_count} reports clustered
@@ -199,6 +227,38 @@ export default function TicketDetailModal({
               <h4 className="text-sm font-medium text-slate-400 mb-2">Description</h4>
               <p className="text-slate-200">{ticket.description}</p>
             </div>
+
+            {/* Clustered Reports */}
+            {ticket.report_count > 1 && (
+              <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    Clustered Reports ({ticket.report_count})
+                  </h4>
+                  {isLoadingReports && <Loader2 className="w-4 h-4 animate-spin text-slate-500" />}
+                </div>
+                {reports.length > 0 ? (
+                  <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    {reports.map((report) => (
+                      <div key={report.id} className="p-3 bg-slate-900 rounded border border-slate-800 hover:border-slate-700 transition-colors">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-sm font-medium text-blue-400">
+                            {report.citizen_name || 'Anonymous Citizen'}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {formatDistanceToNow(new Date(report.created_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300">{report.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : !isLoadingReports && (
+                  <p className="text-sm text-slate-500 text-center py-4 bg-slate-900 rounded">No sub-tickets available.</p>
+                )}
+              </div>
+            )}
 
             {/* Urgency Score */}
             <div className="p-4 bg-slate-800/50 rounded-lg">
