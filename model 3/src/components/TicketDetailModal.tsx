@@ -173,8 +173,8 @@ export default function TicketDetailModal({
                 Created {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
               </p>
             </div>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="w-4 h-4" />
+            <Button variant="ghost" size="sm" onClick={onClose} className="text-slate-400 hover:text-white hover:bg-slate-800">
+              <X className="w-5 h-5" />
             </Button>
           </div>
         </DialogHeader>
@@ -519,22 +519,22 @@ export default function TicketDetailModal({
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-800">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} className="border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white">
             Close
           </Button>
           {ticket.status !== 'resolved' && ticket.status !== 'verified' && ticket.status !== 'closed' && (
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <Select value={newStatus} onValueChange={setNewStatus}>
-                <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700">
+                <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700 text-slate-100">
                   <SelectValue placeholder="Update Status" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">
-                  <SelectItem value="reported">Reported</SelectItem>
-                  <SelectItem value="assigned">Assigned</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="on_site">On Site</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="escalated">Escalated</SelectItem>
+                <SelectContent className="bg-slate-800 border-slate-700 text-slate-100 z-[10500]">
+                  <SelectItem value="reported" className="focus:bg-slate-700 focus:text-white cursor-pointer">Reported</SelectItem>
+                  <SelectItem value="assigned" className="focus:bg-slate-700 focus:text-white cursor-pointer">Assigned</SelectItem>
+                  <SelectItem value="in_progress" className="focus:bg-slate-700 focus:text-white cursor-pointer">In Progress</SelectItem>
+                  <SelectItem value="on_site" className="focus:bg-slate-700 focus:text-white cursor-pointer">On Site</SelectItem>
+                  <SelectItem value="resolved" className="focus:bg-slate-700 focus:text-white cursor-pointer">Resolved</SelectItem>
+                  <SelectItem value="escalated" className="focus:bg-slate-700 focus:text-white cursor-pointer">Escalated</SelectItem>
                 </SelectContent>
               </Select>
               <Button 

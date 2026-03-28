@@ -82,6 +82,7 @@ class CitizenReportResponse(BaseModel):
     source: str
     created_at: str
     master_ticket_id: Optional[int]
+    master_ticket_status: Optional[str] = None
     
     class Config:
         from_attributes = True

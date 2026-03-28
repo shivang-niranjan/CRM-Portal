@@ -23,18 +23,34 @@ import { formatDistanceToNow } from 'date-fns';
 
 const StatusStepper = ({ status }: { status: string }) => {
   const steps = ['reported', 'assigned', 'in_progress', 'resolved'];
-  const currentIndex = steps.indexOf(status.toLowerCase());
+  
+  // Normalize backend statuses to fit the 4 visual steps
+  let normalizedStatus = status.toLowerCase();
+  if (normalizedStatus === 'clustered') normalizedStatus = 'reported';
+  if (normalizedStatus === 'on_site') normalizedStatus = 'in_progress';
+  if (normalizedStatus === 'closed' || normalizedStatus === 'verified') normalizedStatus = 'resolved';
+
+  const currentIndex = steps.indexOf(normalizedStatus);
+  const activeIndex = currentIndex === -1 ? 0 : currentIndex; // Default to 'reported' if unknown
   
   return (
     <div className="flex items-center w-full mt-4 gap-1">
       {steps.map((step, idx) => (
         <React.Fragment key={step}>
           <div className="flex flex-col items-center flex-1">
-            <div className={`w-3 h-3 rounded-full ${idx <= currentIndex ? 'bg-blue-500' : 'bg-slate-700'}`} />
-            <span className="text-[10px] mt-1 capitalize text-slate-500">{step.replace('_', ' ')}</span>
+            <div className={`w-3 h-3 rounded-full transition-colors duration-500 ${
+              idx <= activeIndex ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-700'
+            }`} />
+            <span className={`text-[10px] mt-1 capitalize font-medium ${
+              idx <= activeIndex ? 'text-emerald-400' : 'text-slate-500'
+            }`}>
+              {step.replace('_', ' ')}
+            </span>
           </div>
           {idx < steps.length - 1 && (
-            <div className={`h-[1px] flex-1 mb-4 ${idx < currentIndex ? 'bg-blue-500' : 'bg-slate-700'}`} />
+            <div className={`h-[2px] flex-1 mb-4 transition-colors duration-500 ${
+              idx < activeIndex ? 'bg-emerald-500' : 'bg-slate-700'
+            }`} />
           )}
         </React.Fragment>
       ))}
@@ -74,6 +90,8 @@ const CitizenDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(fetchData, 10000); // 10s auto-refresh for live status
+    return () => clearInterval(interval);
   }, [fetchData]);
 
   const handleVoiceIntake = () => {
@@ -321,7 +339,7 @@ const CitizenDashboard: React.FC = () => {
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Live Status Tracking</span>
                         <span className="text-[10px] text-blue-400 font-bold uppercase">Syncing...</span>
                       </div>
-                      <StatusStepper status={report.master_ticket_id ? 'clustered' : 'reported'} />
+                      <StatusStepper status={report.master_ticket_status || (report.master_ticket_id ? 'clustered' : 'reported')} />
                     </div>
                   </CardContent>
                 </Card>

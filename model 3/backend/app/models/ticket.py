@@ -84,7 +84,7 @@ class CitizenReport(Base):
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API responses."""
-        return {
+        data = {
             "id": self.id,
             "citizen_id": self.citizen_id,
             "citizen_name": self.citizen_name,
@@ -100,6 +100,10 @@ class CitizenReport(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "master_ticket_id": self.master_ticket_id
         }
+        if self.master_ticket_id and self.master_ticket:
+            data["master_ticket_status"] = self.master_ticket.status.value
+            
+        return data
 
 
 class MasterTicket(Base):

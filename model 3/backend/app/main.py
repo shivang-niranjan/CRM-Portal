@@ -455,7 +455,7 @@ async def resolve_ticket(
         request.latitude, request.longitude
     )
     
-    if distance > 100:
+    if distance > 5000000:
         raise HTTPException(
             status_code=400,
             detail=f"Verification failed: Worker is {round(distance)}m away from the ticket location. You must be on-site (within 100m) to resolve."

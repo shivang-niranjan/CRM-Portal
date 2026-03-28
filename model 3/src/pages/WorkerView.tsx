@@ -82,7 +82,7 @@ const WorkerView: React.FC = () => {
     setCameraTask(task);
     try {
       const videoStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
+        video: { facingMode: { ideal: "environment" } } 
       });
       setStream(videoStream);
       if (videoRef.current) {
@@ -144,28 +144,34 @@ const WorkerView: React.FC = () => {
             ctx.fillText(`Time: ${new Date().toLocaleString()}`, 20, canvas.height - 15);
             
             canvas.toBlob(async (blob) => {
-              if (!blob) throw new Error("Canvas rendering failed");
-              
-              const file = new File([blob], `resolution_${cameraTask.id}.jpg`, { type: 'image/jpeg' });
-              
-              toast.info("Uploading geo-tagged evidence...");
-              const imageUrl = await api.uploadImage(file);
+              try {
+                if (!blob) throw new Error("Canvas rendering failed");
+                
+                const file = new File([blob], `resolution_${cameraTask.id}.jpg`, { type: 'image/jpeg' });
+                
+                toast.info("Uploading geo-tagged evidence...");
+                const imageUrl = await api.uploadImage(file);
 
-              const result = await api.resolveTicket(cameraTask.id, {
-                  after_image_url: imageUrl,
-                  resolution_notes: "Issue resolved securely via WebRTC camera.",
-                  worker_id: user?.username || "worker_1",
-                  latitude: pos.coords.latitude,
-                  longitude: pos.coords.longitude
-              });
+                const result = await api.resolveTicket(cameraTask.id, {
+                    after_image_url: imageUrl,
+                    resolution_notes: "Issue resolved securely via WebRTC camera.",
+                    worker_id: user?.username || "worker_1",
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude
+                });
 
-              if (result.success) {
-                  toast.success(result.message);
-                  fetchTasks();
-              } else {
-                  toast.error(result.message);
+                if (result.success) {
+                    toast.success(result.message);
+                    fetchTasks();
+                } else {
+                    toast.error(result.message);
+                }
+              } catch (err: any) {
+                console.error("Resolution failed:", err);
+                toast.error(err.response?.data?.detail || "Upload process failed: Geo-fencing error.");
+              } finally {
+                setIsResolving(null);
               }
-              setIsResolving(null);
             }, 'image/jpeg', 0.9);
         } catch (err: any) {
             console.error("Resolution failed:", err);

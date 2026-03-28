@@ -64,6 +64,7 @@ export interface CitizenReport {
   source: string;
   created_at: string;
   master_ticket_id?: number;
+  master_ticket_status?: string;
   citizen_name?: string;
 }
 
