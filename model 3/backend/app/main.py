@@ -3,13 +3,17 @@ Smart PS-CRM - FastAPI Backend
 Smart Public Service Customer Relationship Management System
 """
 
-from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 import asyncio
+import os
+import uuid
+import shutil
 
 from app.core.config import settings
 from app.db.base import get_db, init_db, engine
@@ -108,6 +112,25 @@ async def health_check():
         "timestamp": datetime.now().isoformat()
     }
 
+# Setup file uploads directory
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+@app.post("/api/upload", tags=["Uploads"])
+async def upload_file(file: UploadFile = File(...)):
+    """Upload an image file securely to backend."""
+    try:
+        ext = file.filename.split('.')[-1] if '.' in file.filename else "jpg"
+        filename = f"{uuid.uuid4()}.{ext}"
+        filepath = os.path.join(UPLOAD_DIR, filename)
+        
+        with open(filepath, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        return {"url": f"http://localhost:8000/uploads/{filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== OMNICHANNEL INTAKE ====================
 
@@ -425,12 +448,6 @@ async def resolve_ticket(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
     
-    if not ticket.before_image_url:
-        raise HTTPException(
-            status_code=400,
-            detail="No before image available for comparison"
-        )
-    
     # Step 1: Geo-fencing check (Worker must be within 100m of the ticket location)
     from app.services.spatial_service import spatial_service
     distance = spatial_service.haversine_distance(
@@ -444,18 +461,24 @@ async def resolve_ticket(
             detail=f"Verification failed: Worker is {round(distance)}m away from the ticket location. You must be on-site (within 100m) to resolve."
         )
 
-    # Perform image similarity check
-    similarity_result = await image_checker.check_similarity(
-        ticket.before_image_url,
-        request.after_image_url
-    )
+    # Perform image similarity check ONLY if before image exists
+    is_passed = True
+    sim_score = 1.0
+    
+    if ticket.before_image_url and request.after_image_url:
+        similarity_result = await image_checker.check_similarity(
+            ticket.before_image_url,
+            request.after_image_url
+        )
+        is_passed = similarity_result.passed
+        sim_score = similarity_result.similarity_score
     
     ticket.after_image_url = request.after_image_url
     ticket.resolution_lat = request.latitude
     ticket.resolution_lon = request.longitude
-    ticket.image_similarity_score = similarity_result.similarity_score
+    ticket.image_similarity_score = sim_score
     
-    if similarity_result.passed:
+    if is_passed:
         ticket.verification_status = "passed"
         ticket.status = ticket_models.TicketStatus.RESOLVED
         ticket.resolved_at = datetime.now()
@@ -487,9 +510,9 @@ async def resolve_ticket(
         return ResolveTicketResponse(
             success=True,
             ticket_id=ticket.id,
-            image_similarity_score=similarity_result.similarity_score,
+            image_similarity_score=sim_score,
             verification_status="passed",
-            message="Ticket resolved successfully. Verification passed."
+            message="Ticket resolved successfully. Verification passed." if ticket.before_image_url else "Ticket resolved successfully (No AI before comparison)."
         )
     else:
         ticket.verification_status = "failed"

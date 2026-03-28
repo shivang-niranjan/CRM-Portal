@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Camera, 
   MapPin, 
@@ -37,14 +39,20 @@ const WorkerView: React.FC = () => {
   const [activeTasks, setActiveTasks] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isResolving, setIsResolving] = useState<number | null>(null);
+  
+  // Custom WebRTC Camera States
+  const [cameraTask, setCameraTask] = useState<Ticket | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchTasks = useCallback(async () => {
     try {
       setIsLoading(true);
       // In a real app, we'd fetch worker_id from profile
-      // For demo, we'll fetch all assigned tickets if no worker_id is linked
-      const tasks = await api.getTickets({ status: 'assigned' });
-      setActiveTasks(tasks);
+      // For demo, we fetch all active tickets and filter in-progress ones
+      const tasks = await api.getTickets();
+      const active = tasks.filter(t => ['assigned', 'in_progress', 'on_site'].includes(t.status));
+      setActiveTasks(active);
     } catch (error) {
       console.error('Failed to fetch tasks:', error);
     } finally {
@@ -60,40 +68,114 @@ const WorkerView: React.FC = () => {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
   };
 
-  const handleResolve = async (ticket: Ticket) => {
-    setIsResolving(ticket.id);
-    toast.info("Capturing secure location and image...");
+  const handleUpdateStatus = async (ticketId: number, status: string) => {
+    try {
+        await api.updateTicket(ticketId, { status });
+        toast.success(`Status updated to ${status.replace('_', ' ')}`);
+        fetchTasks();
+    } catch (err) {
+        toast.error("Failed to update status");
+    }
+  };
+
+  const openCamera = async (task: Ticket) => {
+    setCameraTask(task);
+    try {
+      const videoStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } 
+      });
+      setStream(videoStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = videoStream;
+      }
+    } catch (err) {
+      toast.error("Camera access denied or unavailable.");
+      setCameraTask(null);
+    }
+  };
+
+  const closeCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setStream(null);
+    setCameraTask(null);
+  };
+
+  const captureAndResolve = async () => {
+    if (!videoRef.current || !cameraTask) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Draw the active video frame to canvas
+    ctx.drawImage(videoRef.current, 0, 0);
     
+    // Shut down HTML5 camera stream immediately to save battery
+    closeCamera();
+    setIsResolving(cameraTask.id);
+
     if (!navigator.geolocation) {
-      toast.error("Geolocation not supported by browser");
-      setIsResolving(null);
-      return;
+        toast.error("Geolocation not supported. Required for resolution.");
+        setIsResolving(null);
+        return;
     }
 
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      try {
-        const result = await api.resolveTicket(ticket.id, {
-          after_image_url: "https://images.unsplash.com/photo-1590479773265-7464e5d48118?w=400", // Simulated capture
-          resolution_notes: "Issue resolved successfully. Verified on-site.",
-          worker_id: user?.username || "worker_1",
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude
-        });
+    toast.info("Acquiring exact GPS lock to burn watermark...");
 
-        if (result.success) {
-          toast.success(`Resolved! AI Verification: ${result.verification_status} (${Math.round(result.image_similarity_score * 100)}% match)`);
-          fetchTasks();
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        try {
+            // Apply Secure GeoTag Stripe natively onto canvas context
+            const barHeight = Math.max(120, canvas.height * 0.1);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
+            
+            const fontSize = Math.max(20, Math.floor(barHeight * 0.25));
+            ctx.fillStyle = '#10B981'; // Emerald 500
+            ctx.font = `bold ${fontSize}px monospace`;
+            ctx.fillText(`✓ PS-CRM SECURE GEO-TAG`, 20, canvas.height - barHeight + fontSize + 10);
+            
+            ctx.fillStyle = 'white';
+            ctx.font = `${fontSize}px sans-serif`;
+            ctx.fillText(`Lat: ${pos.coords.latitude.toFixed(6)} | Lng: ${pos.coords.longitude.toFixed(6)}`, 20, canvas.height - Math.floor(barHeight * 0.3));
+            ctx.fillText(`Time: ${new Date().toLocaleString()}`, 20, canvas.height - 15);
+            
+            canvas.toBlob(async (blob) => {
+              if (!blob) throw new Error("Canvas rendering failed");
+              
+              const file = new File([blob], `resolution_${cameraTask.id}.jpg`, { type: 'image/jpeg' });
+              
+              toast.info("Uploading geo-tagged evidence...");
+              const imageUrl = await api.uploadImage(file);
+
+              const result = await api.resolveTicket(cameraTask.id, {
+                  after_image_url: imageUrl,
+                  resolution_notes: "Issue resolved securely via WebRTC camera.",
+                  worker_id: user?.username || "worker_1",
+                  latitude: pos.coords.latitude,
+                  longitude: pos.coords.longitude
+              });
+
+              if (result.success) {
+                  toast.success(result.message);
+                  fetchTasks();
+              } else {
+                  toast.error(result.message);
+              }
+              setIsResolving(null);
+            }, 'image/jpeg', 0.9);
+        } catch (err: any) {
+            console.error("Resolution failed:", err);
+            toast.error("Upload process failed.");
+            setIsResolving(null);
         }
-      } catch (error: any) {
-        // Error is handled by api interceptor toast
-        console.error("Resolution failed:", error);
-      } finally {
-        setIsResolving(null);
-      }
     }, () => {
-      toast.error("Failed to get location. Resolution aborted.");
-      setIsResolving(null);
-    });
+        toast.error("Failed to acquire GPS lock. Location mapping must be enabled!");
+        setIsResolving(null);
+    }, { enableHighAccuracy: true });
   };
 
   return (
@@ -180,23 +262,39 @@ const WorkerView: React.FC = () => {
                   {task.latitude.toFixed(4)}, {task.longitude.toFixed(4)}
                 </div>
               </CardContent>
-              <CardFooter className="p-2 bg-slate-800/30 flex gap-2 shrink-0">
+              <CardFooter className="p-2 bg-slate-800/30 flex gap-2 shrink-0 flex-wrap items-center">
                 <Button 
                   size="sm"
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-xs h-8"
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-xs h-8 min-w-[100px]"
                   onClick={() => handleNavigate(task.latitude, task.longitude)}
                 >
                   <Navigation className="w-3 h-3 mr-1" /> Navigate
                 </Button>
-                <Button 
-                  size="sm"
-                  className="flex-1 bg-green-600 hover:bg-green-500 text-xs h-8"
-                  disabled={isResolving === task.id}
-                  onClick={() => handleResolve(task)}
-                >
-                  {isResolving === task.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Camera className="w-3 h-3 mr-1" />}
-                  Resolve
-                </Button>
+                
+                <div className="flex-1 min-w-[120px]">
+                  <Select value={task.status} onValueChange={(val) => handleUpdateStatus(task.id, val)}>
+                    <SelectTrigger className="h-8 text-xs bg-slate-800 border-slate-700">
+                      <SelectValue placeholder="Update Status" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[10000]">
+                      <SelectItem value="assigned">Assigned</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="on_site">On Site</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex-1 min-w-[100px]">
+                  <Button 
+                    size="sm"
+                    className="w-full bg-green-600 hover:bg-green-500 text-xs h-8 font-bold tracking-wide"
+                    disabled={isResolving === task.id || task.status !== 'on_site'}
+                    onClick={() => openCamera(task)}
+                  >
+                    {isResolving === task.id ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Camera className="w-4 h-4 mr-1.5" />}
+                    Resolve
+                  </Button>
+                </div>
               </CardFooter>
             </Card>
           ))
@@ -217,6 +315,49 @@ const WorkerView: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+        
+      {/* Live Camera Modal Viewfinder */}
+      <Dialog open={cameraTask !== null} onOpenChange={(open) => !open && closeCamera()}>
+        <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 p-0 overflow-hidden text-white flex flex-col items-center">
+          <div className="w-full bg-black relative min-h-[300px] flex items-center justify-center">
+            {stream ? (
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                muted
+                className="w-full h-auto max-h-[70vh] object-cover"
+                onLoadedMetadata={() => videoRef.current?.play()}
+              />
+            ) : (
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+            )}
+            
+            {/* Viewfinder crosshairs representing image center context */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+              <div className="w-48 h-48 border border-emerald-500/50 rounded-xl flex items-center justify-center relative before:content-[''] before:absolute before:w-full before:h-[1px] before:bg-emerald-500/30 after:content-[''] after:absolute after:h-full after:w-[1px] after:bg-emerald-500/30">
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse blur-[1px] shadow-[0_0_10px_red]" />
+              </div>
+            </div>
+            
+            {/* GeoTag overlay preview warning */}
+            <div className="absolute bottom-0 w-full bg-gradient-to-t from-black/90 to-transparent pt-12 pb-4 px-4 text-[11px] sm:text-xs text-white font-mono flex flex-col gap-1 z-10">
+              <span className="text-emerald-400 font-bold tracking-widest flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 animate-bounce" /> SECURE LIVE CAPTURE ACTIVE
+              </span>
+              <span className="text-slate-300">Your GPS coordinates and timestamp will be permanently burned into this image upon capture.</span>
+            </div>
+          </div>
+          <div className="p-4 w-full flex gap-3 bg-slate-900 border-t border-slate-800 shrink-0 z-20">
+             <Button variant="outline" className="flex-1 border-slate-700 bg-slate-800 hover:bg-slate-700 text-white" onClick={closeCamera}>
+                Cancel
+             </Button>
+             <Button className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-white font-bold" onClick={captureAndResolve} disabled={!stream}>
+                <Camera className="w-5 h-5 mr-2" /> Snap & Upload Evidence
+             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

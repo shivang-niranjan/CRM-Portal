@@ -52,6 +52,8 @@ const CitizenDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState('hi-IN');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user?.username) return;
@@ -120,12 +122,26 @@ const CitizenDashboard: React.FC = () => {
     }
   };
 
+  const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+      toast.success("Photo attached successfully");
+    }
+  };
+
   const handleSubmit = async () => {
     if (!complaintText) return toast.error("Please describe the issue");
     if (!location) return toast.error("Please add location");
 
     setIsSubmitting(true);
     try {
+      let uploadedUrl = "https://images.unsplash.com/photo-1584467541268-b040f83be3fd?w=400";
+      if (imageFile) {
+        uploadedUrl = await api.uploadImage(imageFile);
+      }
+
       await api.createReport({
         description: complaintText,
         latitude: location.lat,
@@ -133,10 +149,12 @@ const CitizenDashboard: React.FC = () => {
         citizen_id: user?.username,
         citizen_name: user?.username,
         source: 'web',
-        image_url: "https://images.unsplash.com/photo-1584467541268-b040f83be3fd?w=400"
+        image_url: uploadedUrl
       });
       setComplaintText('');
       setLocation(null);
+      setImageFile(null);
+      setImagePreview(null);
       fetchData();
       toast.success("Complaint submitted successfully! AI is categorizing it now.");
     } catch (error) {
@@ -234,9 +252,19 @@ const CitizenDashboard: React.FC = () => {
                 >
                   <MapPin className="w-4 h-4 mr-2" /> {location ? 'Location Set' : 'Tag Location'}
                 </Button>
-                <Button variant="outline" className="border-slate-800 flex-1">
-                  <Camera className="w-4 h-4 mr-2" /> Add Photo
-                </Button>
+                <div className="flex-1 relative overflow-hidden rounded-md min-w-[120px]">
+                  <input 
+                    type="file" 
+                    id="citizen-camera"
+                    accept="image/*" 
+                    capture="environment" 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    onChange={handleImageCapture}
+                  />
+                  <Button variant="outline" className={`w-full border-slate-800 ${imageFile ? 'text-blue-400 border-blue-500/30' : ''}`} asChild>
+                    <div><Camera className="w-4 h-4 mr-2" /> {imageFile ? 'Photo Added' : 'Add Photo'}</div>
+                  </Button>
+                </div>
                 <Button 
                   className="bg-blue-600 hover:bg-blue-500 flex-[2]"
                   onClick={handleSubmit}

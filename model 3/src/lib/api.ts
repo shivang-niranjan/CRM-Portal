@@ -255,6 +255,15 @@ export const api = {
 
   // ==================== UTILITY ====================
   
+  uploadImage: async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axiosInstance.post('/api/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data.url;
+  },
+
   classifyText: async (text: string): Promise<ClassificationResult> => {
     const response = await axiosInstance.get('/api/classify', { params: { text } });
     return response.data;

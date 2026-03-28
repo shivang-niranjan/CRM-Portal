@@ -118,7 +118,7 @@ def seed_data():
             lat = lat_base + random.uniform(-0.015, 0.015)
             lon = lon_base + random.uniform(-0.015, 0.015)
             
-            status = random.choice([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.ON_SITE])
+            status = random.choice([TicketStatus.CLUSTERED, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.ON_SITE])
             priority = random.choice([TicketPriority.HIGH, TicketPriority.CRITICAL])
             
             # Create MasterTicket
